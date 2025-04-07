@@ -1,9 +1,14 @@
-# Machine-Leaning-Project1
-It is a project 1 for the Introduction to Machine Learning and Data Mining course.
+# The Introduction to Machine Learning and Data Mining course.
+## Project1
+It is about Data: Feature extraction and visualization.
 
 The project description [project_1.pdf](Project-description/02450%20project_1.pdf) and the project data set [finding_a_dataset_for_the project.pdf](Project-description/02450%20finding_a_dataset_for_reports.pdf).
 
 The report on the project [report.pdf](Report/report.pdf) 
+
+## Project2 
+It is about Supervised learning: Classification and regression
+
 # 1. Title of Database: 
     Abalone data
 
@@ -156,5 +161,3 @@ The source of data [**Abalone data**](https://archive.ics.uci.edu/dataset/1/abal
 	-----	----
 	Total	4177
 
-# Project2-Machine-Learning-and-data-mining
-Supervised learning: Classification and regression
