@@ -13,7 +13,8 @@ The Project2 description [Poject_2.pdf](Project-description/02450%20project_2.pd
     Abalone data
 
 # 2. Sources:
-the project data set [finding_a_dataset_for_the project.pdf](Project-description/02450%20finding_a_dataset_for_reports.pdf).
+The project data set [finding_a_dataset_for_the project.pdf](Project-description/02450%20finding_a_dataset_for_reports.pdf).
+
 The source of data [**Abalone data**](https://archive.ics.uci.edu/dataset/1/abalone)
     
     (a) Original owners of database:
