@@ -2,12 +2,14 @@
  ## Project1
     It is about Data: Feature extraction and visualization.
 
-The project description [project_1.pdf](Project-description/02450%20project_1.pdf)
+The Project1 description [project_1.pdf](Project-description/02450%20project_1.pdf)
 
-The report on the project [report.pdf](Report/report.pdf) 
+The report project1 [report.pdf](Report/report.pdf) 
 
 ## Project2 
     It is about Supervised learning: Classification and regression
+The Project2 description [project_2.pdf](Project-description/02450%20project_2.pdf)
+ 
 
 # 1. Title of Database: 
     Abalone data
