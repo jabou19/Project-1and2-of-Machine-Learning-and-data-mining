@@ -263,9 +263,9 @@ for m in range(M):
 # Part B
 
 # Parameters for neural network classifier
-n_hidden_units = 10  # number of hidden units
+n_hidden_units = 5  # number of hidden units
 n_replicates = 1  # number of networks trained in each k-fold
-max_iter = 10000
+max_iter = 5000
 
 # K-fold crossvalidation
 K = 4  # only three folds to speed up this example
