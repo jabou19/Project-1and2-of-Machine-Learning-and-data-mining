@@ -1,5 +1,4 @@
 #%%
-from ucimlrepo import fetch_ucirepo 
 import importlib_resources
 import numpy as np
 import pandas as pd
@@ -25,36 +24,26 @@ data = pd.read_csv("C:\Workspace\Git\Master repos\Project2-Machine-Learning-and-
 # Reprocess the data for classification on "sex"
 # -----------------------------------------------------------
 # Assume the first column ('sex') is the target and the remaining columns are features.
-# Extract target
-y = data.iloc[:, 0].map({'M': -1, 'F': 1, 'I': 0})  # Map 'M', 'F', 'I' to -1, 1, 0 as targets
+# Remove rows where 'sex' is 'I' as this won't be part of the classification process.
+data = data[data.iloc[:, 0] != 'I']
 
+# Extract target and map 'F' to 1 and 'M' to 0
+yy = data.iloc[:, 0].map({'F': 1, 'M': 0}).values.astype(np.float32)
 # Remove the 'sex' column from features
 X = data.iloc[:, 1:]                  # Use the remaining columns as features
 
 # Extract attribute (feature) names
 attributeNames = X.columns.tolist()
 
-# Convert target labels (e.g., 'M', 'F', 'I') to numeric values
-classNames = np.unique(y).tolist()    # List unique class names
-classDict = {label: idx for idx, label in enumerate(classNames)}  # Map each class to an integer
-yy = y.map(classDict).values          # Convert target labels to numerical values
-
-# Convert the features from DataFrame to a NumPy array
-raw_data = X.values
-
-# -----------------------------------------------------------
+#------------------------------------
 # Prepare target labels and map them to integers
 # -----------------------------------------------------------
-classLabels = y.values                # Extract class labels from the target DataFrame
 N, M = X.shape                        # Determine the number of samples (N) and features (M)
-C = len(classNames)                   # Determine the number of classes
+C = 2                                 # Define the number of classes
 
 # -----------------------------------------------------------
 # Convert DataFrame features to a NumPy matrix and standardize
 # -----------------------------------------------------------
-
-# Convert textual class labels to numerical values using the mapping dictionary
-yy = np.array([classDict[value] for value in classLabels])
 
 # Preallocate memory for the feature matrix and populate with data from DataFrame X
 xx = np.empty((N, M))
@@ -74,25 +63,17 @@ for i in range(M):
 # Get the shape of the normalized data (number of samples N and features M)
 N, M = x_normalized.shape
 
-# -----------------------------------------------------------------------------
-# Add offset attribute
-# -----------------------------------------------------------------------------
-# Add a column of ones to the feature matrix to account for the bias term
-x_normalized = np.concatenate((np.ones((x_normalized.shape[0], 1)), x_normalized), 1)
-
-# Update the attribute names to include the "Offset" feature
-attributeNames = ["Offset"] + attributeNames
 
 # %%
 # Part B
 
 # Parameters for neural network classifier
-n_hidden_units = 5  # number of hidden units
+n_hidden_units = 4  # number of hidden units
 n_replicates = 1  # number of networks trained in each k-fold
 max_iter = 5000
 
 # K-fold crossvalidation
-K = 4  # only three folds to speed up this example
+K = 5  # only three folds to speed up this example
 CV = model_selection.KFold(K, shuffle=True)
 
 # Setup figure for display of learning curves and error rates in fold
@@ -113,18 +94,11 @@ color_list = [
 # Define the model
 model = lambda: torch.nn.Sequential(
     torch.nn.Linear(M, n_hidden_units),  # M features to H hiden units
-    torch.nn.ReLU(),  # 1st transfer function
-    # Output layer:
-    # H hidden units to C classes
-    # the nodes and their activation before the transfer
-    # function is often referred to as logits/logit output
-    torch.nn.Linear(n_hidden_units, C),  # C logits
-    # To obtain normalised "probabilities" of each class
-    # we use the softmax-funtion along the "class" dimension
-    # (i.e. not the dimension describing observations)
-    torch.nn.Softmax(dim=1),  # final tranfer function, normalisation of logit output
+    torch.nn.Tanh(),  # 1st transfer function,
+    torch.nn.Linear(n_hidden_units, 1),  # C logits
+    torch.nn.Sigmoid(),  # final tranfer function
 )
-loss_fn = torch.nn.CrossEntropyLoss()  # notice how this is now a mean-squared-error loss
+loss_fn = torch.nn.BCELoss()  # notice how this is now a mean-squared-error loss
 
 print("Training model of type:\n\n{}\n".format(str(model())))
 errors = []  # make a list for storing generalizaition error in each loop
@@ -133,9 +107,9 @@ for k, (train_index, test_index) in enumerate(CV.split(x_normalized, yy)):
 
     # Extract training and test set for current CV fold, convert to tensors
     X_train = torch.Tensor(x_normalized[train_index, :])
-    y_train = torch.LongTensor(yy[train_index])
+    y_train = torch.Tensor(yy[train_index]).unsqueeze(1)
     X_test = torch.Tensor(x_normalized[test_index, :])
-    y_test = torch.LongTensor(yy[test_index])
+    y_test = torch.Tensor(yy[test_index]).unsqueeze(1)
 
     # Train the net on training data
     net, final_loss, learning_curve = train_neural_net(
@@ -149,39 +123,46 @@ for k, (train_index, test_index) in enumerate(CV.split(x_normalized, yy)):
 
     print("\n\tBest loss: {}\n".format(final_loss))
 
-   # Determine probability of each class using trained network
-    softmax_logits = net(torch.tensor(X_test, dtype=torch.float))
-    # Get the estimated class as the class with highest probability (argmax on softmax_logits)
-    y_test_est = (torch.max(softmax_logits, dim=1)[1]).data.numpy()
-    # Determine errors
+    # Determine estimated class labels for test set
+    y_sigmoid = net(X_test)
+    y_test_est = (y_sigmoid > 0.5).type(dtype=torch.uint8)
+
+    # Determine errors and errors
+    y_test = y_test.type(dtype=torch.uint8)
+
     e = y_test_est != y_test
-    print(
-        "Number of miss-classifications for ANN:\n\t {0} out of {1}".format(sum(e), len(e))
-    )
+    error_rate = (sum(e).type(torch.float) / len(y_test)).data.numpy()
+    errors.append(error_rate)  # store error rate for current CV fold
 
-    predict = lambda x: (
-    torch.max(net(torch.tensor(x, dtype=torch.float)), dim=1)[1]
-        ).data.numpy()
-    plt.figure(1, figsize=(9, 9))
-    visualize_decision_boundary(
-        predict, [X_train, X_test], [y_train, y_test], attributeNames, classNames
-    )
-    plt.title("ANN decision boundaries")
+        # Display the learning curve for the best net in the current fold
+    (h,) = summaries_axes[0].plot(learning_curve, color=color_list[k])
+    h.set_label("CV fold {0}".format(k + 1))
+    summaries_axes[0].set_xlabel("Iterations")
+    summaries_axes[0].set_xlim((0, max_iter))
+    summaries_axes[0].set_ylabel("Loss")
+    summaries_axes[0].set_title("Learning curves")
 
 
+# Display the error rate across folds
+summaries_axes[1].bar(
+    np.arange(1, K + 1), np.squeeze(np.asarray(errors)), color=color_list
+)
+summaries_axes[1].set_xlabel("Fold")
+summaries_axes[1].set_xticks(np.arange(1, K + 1))
+summaries_axes[1].set_ylabel("Error rate")
+summaries_axes[1].set_title("Test misclassification rates")
 
+print("Diagram of best neural net in last fold:")
+weights = [net[i].weight.data.numpy().T for i in [0, 2]]
+biases = [net[i].bias.data.numpy() for i in [0, 2]]
+tf = [str(net[i]) for i in [1, 3]]
+draw_neural_net(weights, biases, tf, attribute_names=attributeNames)
 
-# Print the number of misclassifications
+# Print the average classification error rate
 print(
-    "Number of miss-classifications for ANN:\n\t {0} out of {1}".format(
-        sum(e), len(e)
+    "\nGeneralization error/average error rate: {0}%".format(
+        round(100 * np.mean(errors), 4)
     )
 )
-
-print("Ran Exercise 8.2.5")
-
-
-
-
 
 # %%
