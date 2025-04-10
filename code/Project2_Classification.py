@@ -18,7 +18,7 @@ from dtuimldmtools import visualize_decision_boundary
 # -----------------------------------------------------------
 # Fetch dataset and view information
 # -----------------------------------------------------------
-data = pd.read_csv("C:\Workspace\Git\Master repos\Project2-Machine-Learning-and-data-mining\code\AbaloneDataset.csv")
+data = pd.read_csv("AbaloneDataset.csv")
   # Ensure the CSV file is in your working directory
 
 
