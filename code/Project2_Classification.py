@@ -1,343 +1,232 @@
+
+# --- Imports and Setup ---
 #%%
-import importlib_resources
+from ucimlrepo import fetch_ucirepo
 import numpy as np
 import pandas as pd
 import torch
+from scipy import stats
 import matplotlib.pyplot as plt
-from scipy.linalg import svd
-import sklearn.linear_model as lm
-from sklearn.linear_model import LogisticRegression
-from scipy.io import loadmat
 from sklearn import model_selection
-from sklearn.model_selection import train_test_split
-from dtuimldmtools import rlr_validate
-from dtuimldmtools import draw_neural_net, train_neural_net
-from dtuimldmtools import visualize_decision_boundary
+from sklearn.linear_model import LogisticRegression
+from dtuimldmtools import train_neural_net, draw_neural_net
 
 
-# -----------------------------------------------------------
-# Fetch dataset and view information
-# -----------------------------------------------------------
-data = pd.read_csv("AbaloneDataset.csv")
-  # Ensure the CSV file is in your working directory
+# Load and process data
+abalone = fetch_ucirepo(id=1)
+X = abalone.data.features
+y = abalone.data.targets.squeeze() # y is Rings in dataset
+X['Rings'] = y  # Add Rings as a column in X for future reference
+N, M = X.shape
+print("X.shape\n", X)
 
 
-# -----------------------------------------------------------
-# Reprocess the data for classification on "sex"
-# -----------------------------------------------------------
-# Assume the first column ('sex') is the target and the remaining columns are features.
-# Remove rows where 'sex' is 'I' as this won't be part of the classification process.
-data = data[data.iloc[:, 0] != 'I']
+raw_data = X.values         # Convert DataFrame to a raw NumPy array
+print(abalone.metadata)     # Print dataset metadata
+print(abalone.variables)
 
-# Extract target and map 'F' to 1 and 'M' to 0
-yy = data.iloc[:, 0].map({'F': 1, 'M': 0}).values.astype(np.float32)
-# Remove the 'sex' column from features
-X = data.iloc[:, 1:]                  # Use the remaining columns as features
+# Remove ambiguous class 'I'
+X = X[X['Sex'] != 'I']
+y = y.loc[X.index]
 
-# Extract attribute (feature) names
-attributeNames = X.columns.tolist()
+# Binary classification target
+y = X['Sex'].map({'F': 1, 'M': 0}).values.astype(np.float32)
 
-X = X.drop(columns=["Rings"])  # adjust the name if needed
-X = X.drop(columns=["Height"])  # adjust the name if needed
+" Drop only 'Sex' from features"
+X = X.drop(columns=['Sex'])
+N, M = X.shape
+attributeNames = X.columns.tolist()  # Exclude 'Sex' from headers
 
-#------------------------------------
-# Prepare target labels and map them to integers
-# -----------------------------------------------------------
-N, M = X.shape                        # Determine the number of samples (N) and features (M)
-C = 2                                 # Define the number of classes
+X=X.values
+
+pd.set_option('display.max_columns', None)  # Ensure all columns are displayed
 
 
-# %%
-k = 20
-# Set the training and test set sizes for cross-validation
-# Create cross-validation partition for evaluation using stratification and 90% split between training and test
-X_train_lr, X_test_lr, y_train_lr, y_test_lr = train_test_split(X, yy, test_size=.9, stratify=yy, shuffle=True)
+y = y.squeeze() # Ensure y is a 1D array
 
-# Standardize the training and set set based on training set mean and std
-mu = np.mean(X_train_lr, 0)
-sigma = np.std(X_train_lr, 0)
+#%%
+print("____Globally Normalizing Features___")
+#The line X = stats.zscore(X) is used to normalize the dataset X by applying z-score normalization (also known as standardization).
+#This transformation ensures that each feature in X has:
+#A mean of 0
+#A standard deviation of 1
+X= stats.zscore(X)
+print("X Normalizing data set:\n", pd.DataFrame(X, columns=attributeNames[:M]))
 
-X_train_lr = (X_train_lr - mu) / sigma
-X_test_lr = (X_test_lr - mu) / sigma
 
-# Fit regularized logistic regression model to training data to predict sex of abalones
-lambda_interval = np.logspace(-4, 4, 50)
-train_error_rate_lr = np.zeros(len(lambda_interval))
-test_error_rate_lr = np.zeros(len(lambda_interval))
-coefficient_norm = np.zeros(len(lambda_interval))
+#%%
+# --- Two-Level Cross-Validation (ANN vs Logistic Regression vs Baseline) ---
+"""The actual flow is:
+for outer_fold in K1:
+    inner_cv = KFold(K2)
+    for param in parameters:
+        for inner_fold in K2:
+            train model on Dtrain
+            validate on Dval
+        compute average val error
+    select best param
+    train final model on Dpar
+    test on Dtest
+"""
+print("\nClassification part")
+print("\nClassification: Two-level cross-validation  used to compare the three models in the classification problem.")
+print(" ANN vs Logistic Regression vs Baseline")
+K1, K2 = 10, 5  # Outer and inner folds
+outer_cv = model_selection.KFold(K1, shuffle=True, random_state=1)
+lambdas = np.power(10.0, np.arange(-5, 0))
 
-for k in range(0, len(lambda_interval)):
-    mdl = LogisticRegression(penalty="l2", C=1 / lambda_interval[k])
+n_hidden_units_list = [1,2,3,5]
+max_iter = 10000
+n_replicates = 1
 
-    mdl.fit(X_train_lr, y_train_lr)
+results = []
+all_learning_curves = []  # For ANN learning curve plot
 
-    y_train_est_lr = mdl.predict(X_train_lr).T
-    y_test_est_lr = mdl.predict(X_test_lr).T
+# Outer cross-validation
+for k, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
+    print(f"\nOuter Fold {k + 1}/{K1}")
+    X_train_outer, y_train_outer = X[train_idx], y[train_idx]
+    X_test, y_test = X[test_idx], y[test_idx]
 
-    train_error_rate_lr[k] = np.sum(y_train_est_lr != y_train_lr) / len(y_train_lr)
-    test_error_rate_lr[k] = np.sum(y_test_est_lr != y_test_lr) / len(y_test_lr)
+    #____ Inner CV for ANN-----
+    best_h, best_val_error = None, np.inf
+    # Inner cross-validation
+    inner_cv = model_selection.KFold(K2, shuffle=True)
+    # Loop over hidden units
+    for h in n_hidden_units_list:
+        inner_errors = []
+        for inner_train_idx, inner_val_idx in inner_cv.split(X_train_outer):
+            X_in_train = torch.tensor(X_train_outer[inner_train_idx]).float()
+            y_in_train = torch.tensor(y_train_outer[inner_train_idx]).unsqueeze(1)
+            X_val = torch.tensor(X_train_outer[inner_val_idx]).float()
+            y_val = torch.tensor(y_train_outer[inner_val_idx]).unsqueeze(1)
+            # Define the ANN model in inner
+            model = lambda: torch.nn.Sequential(
+                torch.nn.Linear(M, h),
+                torch.nn.Tanh(),
+                torch.nn.Linear(h, 1),
+                torch.nn.Sigmoid()
+            )
 
-    w_est = mdl.coef_[0]
-    coefficient_norm[k] = np.sqrt(np.sum(w_est**2))
+            net, _, _ = train_neural_net(model, torch.nn.BCELoss(), X=X_in_train, y=y_in_train, n_replicates=n_replicates, max_iter=max_iter,tolerance=1e-6)
+            y_val_pred = (net(X_val) > 0.5).int()
+            val_error = (y_val_pred != y_val.int()).float().mean().item()
+            inner_errors.append(val_error)
 
-min_error = np.min(test_error_rate_lr)
-opt_lambda_idx = np.argmin(test_error_rate_lr)
-opt_lambda = lambda_interval[opt_lambda_idx]
+        avg_error = np.mean(inner_errors)
+        if avg_error < best_val_error:
+            best_val_error = avg_error
+            best_h = h
 
-plt.figure(figsize=(8, 8))
-# plt.plot(np.log10(lambda_interval), train_error_rate*100)
-# plt.plot(np.log10(lambda_interval), test_error_rate*100)
-# plt.plot(np.log10(opt_lambda), min_error*100, 'o')
-plt.semilogx(lambda_interval, train_error_rate_lr * 100)
-plt.semilogx(lambda_interval, test_error_rate_lr * 100)
-plt.semilogx(opt_lambda, min_error * 100, "o")
-plt.text(
-    1e-8,
-    3,
-    "Minimum test error: "
-    + str(np.round(min_error * 100, 2))
-    + " % at 1e"
-    + str(np.round(np.log10(opt_lambda), 2)),
-)
-plt.xlabel("Regularization strength, $\log_{10}(\lambda)$")
-plt.ylabel("Error rate (%)")
-plt.title("Classification error")
-plt.legend(["Training error", "Test error", "Test minimum"], loc="upper right")
-plt.ylim([0, 100])
-plt.grid()
-plt.show()
-
-plt.figure(figsize=(8, 8))
-plt.semilogx(lambda_interval, coefficient_norm, "k")
-plt.ylabel("L2 Norm")
-plt.xlabel("Regularization strength, $\log_{10}(\lambda)$")
-plt.title("Parameter vector L2 norm")
-plt.grid()
-plt.show()
-
-# %%
-# -----------------------------------------------------------
-# Convert DataFrame features to a NumPy matrix and standardize
-# -----------------------------------------------------------
-
-# Preallocate memory for the feature matrix and populate with data from DataFrame X
-xx = np.empty((N, M))
-for i in range(M):
-    xx[:, i] = np.array(X.iloc[:, i]).T
-
-# Standardize data by subtracting the mean and dividing by the standard deviation for each feature
-x_normalized = np.empty((N, M))
-for i in range(M):
-    x_normalized[:, i] = (xx[:, i] - np.mean(xx[:, i])) / np.std(xx[:, i])
-
-# Get the shape of the normalized data (number of samples N and features M)
-N, M = x_normalized.shape
-
-# Parameters for neural network classifier
-n_hidden_units = 5  # number of hidden units
-n_replicates = 1  # number of networks trained in each k-fold
-max_iter = 5000
-
-# K-fold crossvalidation
-K = 2  # only three folds to speed up this example
-CV = model_selection.KFold(K, shuffle=True)
-
-# Setup figure for display of learning curves and error rates in fold
-summaries, summaries_axes = plt.subplots(1, 2, figsize=(10, 5))
-# Make a list for storing assigned color of learning curve for up to K=10
-color_list = [
-    "tab:orange",
-    "tab:green",
-    "tab:purple",
-    "tab:brown",
-    "tab:pink",
-    "tab:gray",
-    "tab:olive",
-    "tab:cyan",
-    "tab:red",
-    "tab:blue",
-]
-# Define the model
-model = lambda: torch.nn.Sequential(
-    torch.nn.Linear(M, n_hidden_units),  # M features to H hiden units
-    torch.nn.Tanh(),  # 1st transfer function,
-    torch.nn.Linear(n_hidden_units, 1),  # C logits
-    torch.nn.Sigmoid(),  # final tranfer function
-)
-loss_fn = torch.nn.BCELoss()  # notice how this is now a mean-squared-error loss
-
-print("Training model of type:\n\n{}\n".format(str(model())))
-errors = []  # make a list for storing generalizaition error in each loop
-for k, (train_index, test_index) in enumerate(CV.split(x_normalized, yy)):
-    print("\nCrossvalidation fold: {0}/{1}".format(k + 1, K))
-
-    # Extract training and test set for current CV fold, convert to tensors
-    X_train = torch.Tensor(x_normalized[train_index, :])
-    y_train = torch.Tensor(yy[train_index]).unsqueeze(1)
-    X_test = torch.Tensor(x_normalized[test_index, :])
-    y_test = torch.Tensor(yy[test_index]).unsqueeze(1)
-
-    # Train the net on training data
-    net, final_loss, learning_curve = train_neural_net(
-        model,
-        loss_fn,
-        X=X_train,
-        y=y_train,
-        n_replicates=n_replicates,
-        max_iter=max_iter,
+    # Train best ANN on full outer training set
+    final_model = lambda: torch.nn.Sequential(
+        torch.nn.Linear(M, best_h),
+        torch.nn.Tanh(),
+        torch.nn.Linear(best_h, 1),
+        torch.nn.Sigmoid()
     )
 
-    print("\n\tBest loss: {}\n".format(final_loss))
+    net, _, learning_curve = train_neural_net(
+        final_model, torch.nn.BCELoss(),
+        X=torch.tensor(X_train_outer).float(),
+        y=torch.tensor(y_train_outer).unsqueeze(1),
+        n_replicates=n_replicates, max_iter=max_iter,tolerance=1e-6
+    )
+    all_learning_curves.append(learning_curve)
+    y_ann_pred = (net(torch.tensor(X_test).float()) > 0.5).int().numpy().squeeze()
+    # Test error for ANN for the outer fold
+    ann_test_error = np.mean(y_ann_pred != y_test)
 
-    # Determine estimated class labels for test set
-    y_sigmoid = net(X_test)
-    y_test_est = (y_sigmoid > 0.5).type(dtype=torch.uint8)
+    # _____Logistic Regression______
+    best_lambda, best_lr_error = None, np.inf
+    for lmbd in lambdas:
+        lr_errors = []
+        for inner_train_idx, inner_val_idx in inner_cv.split(X_train_outer):
+            X_in_train, y_in_train = X_train_outer[inner_train_idx], y_train_outer[inner_train_idx]
+            X_val, y_val = X_train_outer[inner_val_idx], y_train_outer[inner_val_idx]
+            # ___Logistic Regression___ .
+            lr = LogisticRegression(penalty='l2', C=1 / lmbd, max_iter=max_iter)
+            lr.fit(X_in_train, y_in_train)
+            pred = lr.predict(X_val)
+            lr_errors.append(np.mean(pred != y_val))
 
-    # Determine errors and errors
-    y_test = y_test.type(dtype=torch.uint8)
+        avg_error = np.mean(lr_errors)
+        if avg_error < best_lr_error:
+            best_lr_error = avg_error
+            best_lambda = lmbd
 
-    e = y_test_est != y_test
-    error_rate = (sum(e).type(torch.float) / len(y_test)).data.numpy()
-    errors.append(error_rate)  # store error rate for current CV fold
+    lr = LogisticRegression(penalty='l2', C=1 / best_lambda, max_iter=max_iter)
+    lr.fit(X_train_outer, y_train_outer)
+    y_lr_pred = lr.predict(X_test)
+    # Test error for Logistic Regression for the outer fold
+    lr_test_error = np.mean(y_lr_pred != y_test)
 
-        # Display the learning curve for the best net in the current fold
-    (h,) = summaries_axes[0].plot(learning_curve, color=color_list[k])
-    h.set_label("CV fold {0}".format(k + 1))
-    summaries_axes[0].set_xlabel("Iterations")
-    summaries_axes[0].set_xlim((0, max_iter))
-    summaries_axes[0].set_ylabel("Loss")
-    summaries_axes[0].set_title("Learning curves")
+    # Baseline
+    majority = int(np.round(y_train_outer.mean()) > 0.5)
+    y_base_pred = np.ones_like(y_test) * majority
+    baseline_error = np.mean(y_base_pred != y_test)
 
+    results.append({
+        'Fold': k + 1,
+        'ANN h*': best_h,
+        'ANN E_test': np.round(ann_test_error, 3),
+        'LR λ*': np.round(best_lambda, 3),
+        'LR E_test': np.round(lr_test_error, 3),
+        'Baseline E_test': np.round(baseline_error, 3)
+    })
 
-# Display the error rate across folds
-summaries_axes[1].bar(
-    np.arange(1, K + 1), np.squeeze(np.asarray(errors)), color=color_list
-)
+# --- Final Results Table and Summary ---
+results_df = pd.DataFrame(results)
+
+# --- Combined Figure: ANN Learning Curves and Error Rates ---
+fig, summaries_axes = plt.subplots(1, 2, figsize=(12, 5))
+color_list = [
+    "tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple",
+    "tab:brown", "tab:pink", "tab:gray", "tab:olive", "tab:cyan"
+]
+
+# Plot learning curves
+for k, curve in enumerate(all_learning_curves):
+    (line,) = summaries_axes[0].plot(curve, color=color_list[k % len(color_list)])
+    line.set_label(f"Fold {k + 1}")
+summaries_axes[0].set_xlabel("Iterations")
+summaries_axes[0].set_ylabel("Loss")
+summaries_axes[0].set_title("ANN Learning Curves")
+summaries_axes[0].legend()
+summaries_axes[0].grid()
+
+# Plot ANN test error per fold
+ann_errors = [entry['ANN E_test'] for entry in results]
+summaries_axes[1].bar(np.arange(1, K1 + 1), ann_errors, color=color_list[:K1])
 summaries_axes[1].set_xlabel("Fold")
-summaries_axes[1].set_xticks(np.arange(1, K + 1))
-summaries_axes[1].set_ylabel("Error rate")
-summaries_axes[1].set_title("Test misclassification rates")
+summaries_axes[1].set_ylabel("Error Rate")
+summaries_axes[1].set_title("ANN Test Error Rates")
+summaries_axes[1].set_xticks(np.arange(1, K1 + 1))
+summaries_axes[1].grid(axis='y')
 
-print("Diagram of best neural net in last fold:")
+plt.tight_layout()
+plt.show()
+
+# --- Diagram of best neural net in last fold ---
+print("\nDiagram of best neural net in last fold:")
 weights = [net[i].weight.data.numpy().T for i in [0, 2]]
 biases = [net[i].bias.data.numpy() for i in [0, 2]]
 tf = [str(net[i]) for i in [1, 3]]
 draw_neural_net(weights, biases, tf, attribute_names=attributeNames)
 
-# Print the average classification error rate
-print(
-    "\nGeneralization error/average error rate: {0}%".format(
-        round(100 * np.mean(errors), 4)
-    )
-)
-
-# %%
-# -----------------------------------------------------------
-# out and in Cross-Validation for Hyperparameter Tuning
-# -----------------------------------------------------------
-
-# Candidate number of hidden units to test in the in loop
-candidate_hidden_units = [3, 4, 5, 6]
-
-# out CV: 10 folds
-K_out = 10
-out_CV = model_selection.KFold(K_out, shuffle=True)
-
-out_errors = []  # To store out fold test error
-chosen_hidden_units = []  # To store chosen candidate per out fold
-
-for out_fold, (out_train_idx, out_test_idx) in enumerate(out_CV.split(x_normalized, yy)):
-    print(f"\nout CV fold {out_fold+1}/{K_out}")
-    # Prepare out train and test data
-    X_out_train = x_normalized[out_train_idx, :]
-    y_out_train = yy[out_train_idx]
-    X_out_test = x_normalized[out_test_idx, :]
-    y_out_test = yy[out_test_idx]
-    
-    # in CV: use 10 folds on the out training set for model selection
-    K_in = 10
-    in_CV = model_selection.KFold(K_in, shuffle=True)
-    
-    # Store average in validation error for each candidate hidden unit
-    candidate_avg_errors = []
-    
-    for h in candidate_hidden_units:
-        in_errors = []  # Collect in validation error for current candidate
-        for in_train_idx, in_val_idx in in_CV.split(X_out_train, y_out_train):
-            # Create in training and validation sets
-            X_in_train = torch.Tensor(X_out_train[in_train_idx, :])
-            y_in_train = torch.Tensor(y_out_train[in_train_idx]).unsqueeze(1)
-            X_in_val = torch.Tensor(X_out_train[in_val_idx, :])
-            y_in_val = torch.Tensor(y_out_train[in_val_idx]).unsqueeze(1)
-            
-            # Define a model using candidate h hidden units and same loss function
-            in_model = lambda: torch.nn.Sequential(
-                torch.nn.Linear(M, h),      # Adjust input -> h hidden units
-                torch.nn.Tanh(),
-                torch.nn.Linear(h, 1),
-                torch.nn.Sigmoid(),
-            )
-            
-            # Train the network on the in training set
-            net_in, final_loss_in, learning_curve_in = train_neural_net(
-                in_model,
-                loss_fn,
-                X=X_in_train,
-                y=y_in_train,
-                n_replicates=n_replicates,
-                max_iter=max_iter,
-            )
-            
-            # Compute validation error on in validation set
-            y_val_pred = net_in(X_in_val)
-            y_val_est = (y_val_pred > 0.5).type(dtype=torch.uint8)
-            error_in = (torch.sum(y_val_est != y_in_val.type(dtype=torch.uint8)).type(torch.float) 
-                           / len(y_in_val)).data.numpy()
-            in_errors.append(error_in)
-        
-        avg_in_error = np.mean(in_errors)
-        candidate_avg_errors.append(avg_in_error)
-        print(f"   Candidate hidden units: {h} with average in error: {avg_in_error*100:.2f}%")
-        
-    # Select best candidate (lowest average in validation error)
-    best_idx = np.argmin(candidate_avg_errors)
-    best_hidden = candidate_hidden_units[best_idx]
-    chosen_hidden_units.append(best_hidden)
-    print(f"Best candidate for out fold {out_fold+1}: {best_hidden} hidden units")
-    
-    # Retrain on the full out training set with the selected hyperparameter
-    final_model = lambda: torch.nn.Sequential(
-        torch.nn.Linear(M, best_hidden),
-        torch.nn.Tanh(),
-        torch.nn.Linear(best_hidden, 1),
-        torch.nn.Sigmoid(),
-    )
-    
-    X_out_train_tensor = torch.Tensor(X_out_train)
-    y_out_train_tensor = torch.Tensor(y_out_train).unsqueeze(1)
-    X_out_test_tensor = torch.Tensor(X_out_test)
-    y_out_test_tensor = torch.Tensor(y_out_test).unsqueeze(1)
-    
-    net_final, final_loss_final, learning_curve_final = train_neural_net(
-        final_model,
-        loss_fn,
-        X=X_out_train_tensor,
-        y=y_out_train_tensor,
-        n_replicates=n_replicates,
-        max_iter=max_iter,
-    )
-    
-    # Evaluate on out test set
-    y_out_pred = net_final(X_out_test_tensor)
-    y_out_est = (y_out_pred > 0.5).type(dtype=torch.uint8)
-    out_error = (torch.sum(y_out_est != y_out_test_tensor.type(dtype=torch.uint8)).type(torch.float) 
-                   / len(y_out_test_tensor)).data.numpy()
-    out_errors.append(out_error)
-    print(f"out fold {out_fold+1} test error: {out_error*100:.2f}%")
-    
-# Report overall performance
-avg_out_error = np.mean(out_errors)
-print(f"\nOverall generalization error: {avg_out_error*100:.2f}%")
-print("Chosen hidden units per out fold:", chosen_hidden_units)
-
-# %%
+# --- Plot 1: Test Error per Fold ---
+plt.figure(figsize=(10, 6))
+plt.plot(results_df['Fold'], results_df['ANN E_test'], label='ANN Test Error', marker='o')
+plt.plot(results_df['Fold'], results_df['LR E_test'], label='Logistic Regression Test Error', marker='s')
+plt.plot(results_df['Fold'], results_df['Baseline E_test'], label='Baseline Error', linestyle='--', color='gray')
+plt.xlabel("Fold")
+plt.ylabel("Test Error Rate (%)")
+plt.title("Classification Error per Fold")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+print(results_df)
+print("\nAverage Errors Across Folds:")
+print(results_df[['ANN E_test', 'LR E_test', 'Baseline E_test']].mean())
+print("\nClassification Two-Level CV Results:")
