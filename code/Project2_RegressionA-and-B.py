@@ -1,5 +1,6 @@
 #%%
 # --- Imports and Setup ---
+from scipy import stats
 from ucimlrepo import fetch_ucirepo
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ abalone = fetch_ucirepo(id=1)
 X = abalone.data.features
 y = abalone.data.targets
 key=abalone.data.keys()
-print("key",key)
+print("key", key)
 
 raw_data = X.values         # Convert DataFrame to a raw NumPy array
 print(abalone.metadata)     # Print dataset metadata
@@ -34,28 +35,23 @@ classDict = dict(zip(classNames, range(1, len(classNames) + 1)))  # Map classes 
 
 N, M = X.shape
 C = len(classNames)
-print("M is is number of attributtes",M)
-print("N is is number of rows: ", N)
-print("c is number of classes: ", C)
 
 yy = y.values.squeeze() # squeeze to convert to 1D array
-xx = X.values
 
-#pd.set_option('display.max_columns', None)  # Ensure all columns are displaye
-#print(pd.DataFrame(xx, columns=attributeNames).assign(Target=yy))
 
 #%%
 # --- Normalize Features Globally Before CV ---
 print("____Globally Normalizing Features___")
-xx = np.empty((N, M))
-for i in range(M):
-    xx[:, i] = np.array(X.iloc[:, i]).T
-# Standardize data by subtracting the mean and dividing by the standard deviation for each feature
-x_normalized = np.empty((N, M))
-for i in range(M):
-    x_normalized[:, i] = (xx[:, i] - np.mean(xx[:, i])) / np.std(xx[:, i])
+# xx = np.empty((N, M))
+# for i in range(M):
+#     xx[:, i] = np.array(X.iloc[:, i]).T
+# # Standardize data by subtracting the mean and dividing by the standard deviation for each feature
+# x_normalized = np.empty((N, M))
+# for i in range(M):
+#     x_normalized[:, i] = (xx[:, i] - np.mean(xx[:, i])) / np.std(xx[:, i])
 pd.set_option('display.max_columns', None)
-print("x_normalized\n",pd.DataFrame(x_normalized, columns=attributeNames).assign(Target=yy))
+x_normalized= stats.zscore(X)
+print("x_normalized\n",pd.DataFrame(x_normalized, columns=attributeNames))
 #%%
 # --- Part A: Regularized Linear Regression with Single CV ---
 print("_____Part A: Regularized Linear Regression_____")
@@ -235,31 +231,61 @@ print("____Part B: Two-Level Cross-Validation___")
 x_normalized= x_normalized[:, 1:]  # Exclude Offset column
 N, M = x_normalized.shape  # Exclude Offset column
 attributeNames = list(X.columns)
-print("M is is number of attributtes",M)
-print("attributeNames",attributeNames)
-print("N is is number of rows: ", N)
-print("x_normalized\n", pd.DataFrame(x_normalized, columns=attributeNames))
 
-n_hidden_units_list = [1, 3, 5]
-max_iter = 10
-n_replicates = 1
-K1, K2 = 5, 5
+# Set parameters
+K1, K2 = 10, 5
 outer_cv = model_selection.KFold(K1, shuffle=True, random_state=1)
-lambdas = np.power(10.0, range(-5, 9))
+lambdas = np.power(10.0, range(-5, 0))
+n_hidden_units_list = [1,2,3, 5]
+max_iter = 10000
+n_replicates = 1
 
 results = []
 all_learning_curves = []
 all_ann_errors = []
 
-for k, (outer_train_idx, outer_test_idx) in enumerate(outer_cv.split(x_normalized,yy)):
+# Begin outer cross-validation
+for k, (outer_train_idx, outer_test_idx) in enumerate(outer_cv.split(x_normalized, yy)):
     print(f"\nCrossvalidation fold: {k + 1}/{K1}")
     X_train_outer, y_train_outer = x_normalized[outer_train_idx], yy[outer_train_idx]
     X_test_outer, y_test_outer = x_normalized[outer_test_idx], yy[outer_test_idx]
 
-    best_h, best_ann_val = None, float('inf')
+    # --- Inner CV for RLR ---
+    inner_cv = model_selection.KFold(K2, shuffle=True)
+    rlr_val_errors = []
+    for lmbd in lambdas:
+        inner_errors = []
+        for inner_train_idx, inner_val_idx in inner_cv.split(X_train_outer):
+            X_inner_train = X_train_outer[inner_train_idx]
+            y_inner_train = y_train_outer[inner_train_idx]
+            X_inner_val = X_train_outer[inner_val_idx]
+            y_inner_val = y_train_outer[inner_val_idx]
+
+            M = X_inner_train.shape[1]
+            X_train_bias = np.concatenate((np.ones((X_inner_train.shape[0], 1)), X_inner_train), axis=1)
+            X_val_bias = np.concatenate((np.ones((X_inner_val.shape[0], 1)), X_inner_val), axis=1)
+            lambdaI = lmbd * np.eye(M + 1)
+            lambdaI[0, 0] = 0
+            w_rlr = np.linalg.solve(X_train_bias.T @ X_train_bias + lambdaI, X_train_bias.T @ y_inner_train)
+            val_error = np.mean((y_inner_val - X_val_bias @ w_rlr) ** 2)
+            inner_errors.append(val_error)
+        rlr_val_errors.append(np.mean(inner_errors))
+    # Select optimal lambda based on validation errors
+    opt_lambda = lambdas[np.argmin(rlr_val_errors)]
+    # Retrain RLR on full outer training set
+    M_rlr = X_train_outer.shape[1]
+    X_train_rlr = np.concatenate((np.ones((X_train_outer.shape[0], 1)), X_train_outer), axis=1)
+    X_test_rlr = np.concatenate((np.ones((X_test_outer.shape[0], 1)), X_test_outer), axis=1)
+    lambdaI = opt_lambda * np.eye(M_rlr + 1)
+    lambdaI[0, 0] = 0
+    w_rlr = np.linalg.solve(X_train_rlr.T @ X_train_rlr + lambdaI, X_train_rlr.T @ y_train_outer)
+    # Compute test error for linear regression over the outer test set
+    rlr_test_error = np.mean((y_test_outer - X_test_rlr @ w_rlr) ** 2)
+
+    # --- Inner CV for ANN ---
+    ann_val_errors = []
     for h in n_hidden_units_list:
         inner_errors = []
-        inner_cv = model_selection.KFold(K2, shuffle=True)
         for inner_train_idx, inner_val_idx in inner_cv.split(X_train_outer):
             X_inner_train = torch.Tensor(X_train_outer[inner_train_idx])
             y_inner_train = torch.Tensor(y_train_outer[inner_train_idx]).unsqueeze(1)
@@ -267,41 +293,24 @@ for k, (outer_train_idx, outer_test_idx) in enumerate(outer_cv.split(x_normalize
             y_inner_val = torch.Tensor(y_train_outer[inner_val_idx]).unsqueeze(1)
 
             model = lambda: torch.nn.Sequential(
-                torch.nn.Linear(M, h), torch.nn.ReLU(), torch.nn.Linear(h, 1)
+                torch.nn.Linear(M_rlr, h), torch.nn.ReLU(), torch.nn.Linear(h, 1)
             )
-            net, _, _ = train_neural_net(model, torch.nn.MSELoss(), X_inner_train, y_inner_train, n_replicates, max_iter)
+            net, _, _ = train_neural_net(model, torch.nn.MSELoss(), X=X_inner_train, y=y_inner_train, n_replicates=n_replicates, max_iter=max_iter)
             pred = net(X_inner_val)
             val_loss = torch.nn.MSELoss()(pred, y_inner_val).item()
             inner_errors.append(val_loss)
+        ann_val_errors.append(np.mean(inner_errors))
 
-        if np.mean(inner_errors) < best_ann_val:
-            best_ann_val = np.mean(inner_errors)
-            best_h = h
-
+    best_h = n_hidden_units_list[np.argmin(ann_val_errors)]
     model = lambda: torch.nn.Sequential(
-        torch.nn.Linear(M, best_h), torch.nn.ReLU(), torch.nn.Linear(best_h, 1)
+        torch.nn.Linear(M_rlr, best_h), torch.nn.ReLU(), torch.nn.Linear(best_h, 1)
     )
     net, _, learning_curve = train_neural_net(model, torch.nn.MSELoss(),
         X=torch.Tensor(X_train_outer).float(),
         y=torch.Tensor(y_train_outer).unsqueeze(1).float(),
         n_replicates=n_replicates, max_iter=max_iter)
-
     ann_test_error = torch.nn.MSELoss()(net(torch.Tensor(X_test_outer).float()),
                                         torch.Tensor(y_test_outer).unsqueeze(1).float()).item()
-
-    all_learning_curves.append(learning_curve)
-    all_ann_errors.append(ann_test_error)
-
-    # Regularized Linear Regression (with offset)
-    X_train_rlr = np.concatenate((np.ones((X_train_outer.shape[0], 1)), X_train_outer), axis=1)
-    X_test_rlr = np.concatenate((np.ones((X_test_outer.shape[0], 1)), X_test_outer), axis=1)
-    M_rlr = X_train_rlr.shape[1]
-
-    opt_val_err, opt_lambda, _, _, _ = rlr_validate(X_train_rlr, y_train_outer, lambdas, K2)
-    lambdaI = opt_lambda * np.eye(M_rlr)
-    lambdaI[0, 0] = 0
-    w_rlr = np.linalg.solve(X_train_rlr.T @ X_train_rlr + lambdaI, X_train_rlr.T @ y_train_outer)
-    rlr_test_error = np.mean((y_test_outer - X_test_rlr @ w_rlr) ** 2)
 
     baseline_pred = np.mean(y_train_outer)
     baseline_error = np.mean((y_test_outer - baseline_pred) ** 2)
@@ -309,11 +318,15 @@ for k, (outer_train_idx, outer_test_idx) in enumerate(outer_cv.split(x_normalize
     results.append({
         'Fold': k + 1,
         'ANN hidden units': best_h,
-        'ANN error': ann_test_error,
-        'RLR lambda': opt_lambda,
-        'RLR error': rlr_test_error,
-        'Baseline error': baseline_error
+        'ANN error': np.round(ann_test_error, 3),
+        'RLR lambda': np.round(opt_lambda, 3),
+        'RLR error': np.round(rlr_test_error, 3),
+        'Baseline error': np.round(baseline_error,3)
     })
+
+    all_learning_curves.append(learning_curve)
+    all_ann_errors.append(ann_test_error)
+
 
 # --- Plot ANN Learning Curves ---
 plt.figure(figsize=(12, 5))
@@ -333,15 +346,19 @@ weights = [net[i].weight.data.numpy().T for i in [0, 2]]
 biases = [net[i].bias.data.numpy() for i in [0, 2]]
 tf = [str(net[i]) for i in [1, 2]]
 attributeNames_full = attributeNames  # No offset
-draw_neural_net(weights, biases, tf, attribute_names=attributeNames_full)
+try:
+    from dtuimldmtools import draw_neural_net
+    draw_neural_net(weights, biases, tf, attribute_names=attributeNames_full)
+except Exception as e:
+    print(f"Could not draw neural net diagram: {e}")
 
 # --- Bar Plot of ANN MSEs Across Folds ---
 plt.figure(figsize=(8, 5))
-plt.bar(np.arange(1, K1+1), all_ann_errors, color='skyblue')
+plt.bar(np.arange(1, K1 + 1), all_ann_errors, color='skyblue')
 plt.xlabel("Fold")
 plt.ylabel("MSE")
 plt.title("Test Mean Squared Error (ANN Model)")
-plt.xticks(np.arange(1, K1+1))
+plt.xticks(np.arange(1, K1 + 1))
 plt.grid(axis='y')
 plt.tight_layout()
 plt.show()
@@ -365,4 +382,16 @@ results_df.to_csv('results.csv', index=False)
 print("\n  Regression, part b: Two-level cross-validation table used to compare the three models:")
 print(results_df)
 print("\nAverage Test Errors:")
+
 print(results_df[['ANN error', 'RLR error', 'Baseline error']].mean())
+plt.figure(figsize=(10, 6))
+plt.plot(results_df['Fold'], results_df['ANN error'], label='ANN Test Error', marker='o')
+plt.plot(results_df['Fold'], results_df['RLR error'], label='Linear Regression Test Error', marker='s')
+plt.plot(results_df['Fold'], results_df['Baseline error'], label='Baseline Error', linestyle='--', color='gray')
+plt.xlabel("Fold")
+plt.ylabel("Test Error Rate (%)")
+plt.title("Classification Error per Fold")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
