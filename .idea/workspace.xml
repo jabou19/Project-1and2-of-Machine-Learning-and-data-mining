@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f375c4e8-a3f0-4d8a-88f4-b5cb78859db1" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/code/Project2_Classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/code/Project2_Classification.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/code/Project2_RegressionA-and-B.py" beforeDir="false" afterPath="$PROJECT_DIR$/code/Project2_RegressionA-and-B.py" afterDir="false" />
-    </list>
+    <list default="true" id="f375c4e8-a3f0-4d8a-88f4-b5cb78859db1" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -126,7 +121,7 @@
       <workItem from="1740495216784" duration="523000" />
       <workItem from="1740495774707" duration="1152000" />
       <workItem from="1740497527674" duration="1090000" />
-      <workItem from="1746142090802" duration="1341000" />
+      <workItem from="1746142090802" duration="1655000" />
     </task>
     <servers />
   </component>
@@ -135,7 +130,7 @@
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/Project_1and2_of_Machine_Learning_and_data_mining$Project2_RegressionA_and_B.coverage" NAME="Project2_RegressionA-and-B Coverage Results" MODIFIED="1746142158582" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/code" />
-    <SUITE FILE_PATH="coverage/Project_1and2_of_Machine_Learning_and_data_mining$Project2_Classification.coverage" NAME="Project2_Classification Coverage Results" MODIFIED="1744138056649" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/code" />
+    <SUITE FILE_PATH="coverage/Project_1and2_of_Machine_Learning_and_data_mining$Project2_Classification.coverage" NAME="Project2_Classification Coverage Results" MODIFIED="1746143494080" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/code" />
     <SUITE FILE_PATH="coverage/Project_1and2_of_Machine_Learning_and_data_mining$Project2_Regression.coverage" NAME="Project2_Regression Coverage Results" MODIFIED="1744137884946" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/code" />
     <SUITE FILE_PATH="coverage/Machine_Leaning_Project1$code.coverage" NAME="code Coverage Results" MODIFIED="1740496307160" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/abalone" />
     <SUITE FILE_PATH="coverage/Project_1and2_of_Machine_Learning_and_data_mining$Project1.coverage" NAME="Project1 Coverage Results" MODIFIED="1744134531840" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/code" />

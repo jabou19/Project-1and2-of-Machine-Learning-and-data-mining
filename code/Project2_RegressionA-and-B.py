@@ -223,6 +223,19 @@ print("______Regression, part A Done____")
 
 print("____Part B: Two-Level Cross-Validation___")
 
+"""The actual flow is:
+for outer_fold in K1:
+    inner_cv = KFold(K2)
+    for param in parameters:
+        for inner_fold in K2:
+            train model on Dtrain
+            validate on Dval
+        compute average val error
+    select best param
+    train final model on Dpar
+    test on Dtest
+"""
+
 " add offset column here "
 # N, M = x_normalized.shape
 # print("x_normalized\n",pd.DataFrame(x_normalized, columns=attributeNames).assign(Target=yy))
