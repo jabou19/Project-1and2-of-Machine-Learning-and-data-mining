@@ -145,7 +145,7 @@ for k, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
             X_in_train, y_in_train = X_train_outer[inner_train_idx], y_train_outer[inner_train_idx]
             X_val, y_val = X_train_outer[inner_val_idx], y_train_outer[inner_val_idx]
             # ___Logistic Regression___ .
-            lr = LogisticRegression(penalty='l2', C=1 / lmbd, max_iter=max_iter)
+            lr = LogisticRegression(penalty='l2', C=1 / lmbd, max_iter=100)
             lr.fit(X_in_train, y_in_train)
             pred = lr.predict(X_val)
             lr_errors.append(np.mean(pred != y_val))
@@ -155,7 +155,7 @@ for k, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
             best_lr_error = avg_error
             best_lambda = lmbd
 
-    lr = LogisticRegression(penalty='l2', C=1 / best_lambda, max_iter=max_iter)
+    lr = LogisticRegression(penalty='l2', C=1 / best_lambda, max_iter=100)
     lr.fit(X_train_outer, y_train_outer)
     y_lr_pred = lr.predict(X_test)
     # Test error for Logistic Regression for the outer fold
