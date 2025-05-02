@@ -75,7 +75,7 @@ K1, K2 = 10, 5  # Outer and inner folds
 outer_cv = model_selection.KFold(K1, shuffle=True, random_state=1)
 lambdas = np.power(10.0, np.arange(-5, 0))
 
-n_hidden_units_list = [1,2,3,5]
+n_hidden_units_list = [1,3,4,5]
 max_iter = 10000
 n_replicates = 1
 

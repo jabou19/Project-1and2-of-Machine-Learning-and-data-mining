@@ -249,7 +249,7 @@ attributeNames = list(X.columns)
 K1, K2 = 10, 5
 outer_cv = model_selection.KFold(K1, shuffle=True, random_state=1)
 lambdas = np.power(10.0, range(-5, 0))
-n_hidden_units_list = [1,2,3,5]
+n_hidden_units_list = [1,3,4,5]
 max_iter = 10000
 n_replicates = 1
 
@@ -353,6 +353,17 @@ plt.grid()
 plt.tight_layout()
 plt.show()
 
+# --- Bar Plot of ANN MSEs Across Folds ---
+plt.figure(figsize=(8, 5))
+plt.bar(np.arange(1, K1 + 1), all_ann_errors, color='skyblue')
+plt.xlabel("Fold")
+plt.ylabel("MSE")
+plt.title("Test Mean Squared Error (ANN Model)")
+plt.xticks(np.arange(1, K1 + 1))
+plt.grid(axis='y')
+plt.tight_layout()
+plt.show()
+
 # --- Diagram of Best Neural Net in Last Fold ---
 print("\nDiagram of best neural net in last fold:")
 weights = [net[i].weight.data.numpy().T for i in [0, 2]]
@@ -365,16 +376,6 @@ try:
 except Exception as e:
     print(f"Could not draw neural net diagram: {e}")
 
-# --- Bar Plot of ANN MSEs Across Folds ---
-plt.figure(figsize=(8, 5))
-plt.bar(np.arange(1, K1 + 1), all_ann_errors, color='skyblue')
-plt.xlabel("Fold")
-plt.ylabel("MSE")
-plt.title("Test Mean Squared Error (ANN Model)")
-plt.xticks(np.arange(1, K1 + 1))
-plt.grid(axis='y')
-plt.tight_layout()
-plt.show()
 
 # --- Prediction vs True for Last Fold ---
 y_est = net(torch.Tensor(X_test_outer)).detach().numpy().squeeze()
