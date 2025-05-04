@@ -74,9 +74,9 @@ print("\nClassification: Two-level cross-validation  used to compare the three m
 print(" ANN vs Logistic Regression vs Baseline")
 K1, K2 = 5, 5  # Outer and inner folds
 outer_cv = model_selection.KFold(K1, shuffle=True, random_state=1)
-lambdas = np.power(10.0, np.arange(-5, 0))
+lambdas = np.power(10.0, np.arange(-5, 1))
 
-n_hidden_units_list = [1,3,4,5]
+n_hidden_units_list = [1,2,3,4,5]
 max_iter = 10000
 n_replicates = 1
 
