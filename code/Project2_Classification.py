@@ -188,27 +188,6 @@ for k, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
 # --- Final Results Table and Summary ---
 results_df = pd.DataFrame(results)
 
-# # --- Plot 2: Chosen Hidden Units per Fold ---
-# plt.figure(figsize=(10, 5))
-# plt.bar(results_df['Fold'], results_df['ANN h*'], color='skyblue')
-# plt.xlabel("Fold")
-# plt.ylabel("Chosen Hidden Units")
-# plt.title("Selected ANN Hidden Units in Each Fold")
-# plt.grid(axis='y')
-# plt.tight_layout()
-# plt.show()
-#
-# # --- Plot ANN Learning Curves ---
-# plt.figure(figsize=(12, 5))
-# for i, curve in enumerate(all_learning_curves):
-#     plt.plot(curve, label=f'Fold {i+1}')
-# plt.xlabel("Iterations")
-# plt.ylabel("Loss")
-# plt.title("ANN Learning Curves (All Outer Folds)")
-# plt.legend()
-# plt.grid()
-# plt.tight_layout()
-# plt.show()
 
 # --- Combined Figure: ANN Learning Curves and Error Rates ---
 fig, summaries_axes = plt.subplots(1, 2, figsize=(12, 5))
