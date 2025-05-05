@@ -6,7 +6,7 @@ The Project1 description [Project_1.pdf](Project-description/02450%20project_1.p
 
 ## Project2 
     It is about Supervised learning: Classification and regression
-The Project2 description [Poject_2.pdf](Project-description/02450%20project_2.pdf)
+The Project2 description [Poject_2.pdf](Project-description/02450%20project_2.pdf), and The report project1 [Report.pdf](Report/ReportProject_2_Machine_Learning.pdf) 
  
 
 # 1. Title of Database: 
